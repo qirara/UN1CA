@@ -1,0 +1,4 @@
+id=kernel
+name=KernelSU Next kernel
+author=yanzihan, KernelSU-Next
+description=Replaces the stock kernel with a KernelSU Next enabled one (built with target/p3q/kernel/build_kernel.sh).
