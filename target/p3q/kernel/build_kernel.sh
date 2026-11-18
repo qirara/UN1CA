@@ -33,8 +33,10 @@ P3Q_DTBO_REVS=("r03" "r09" "r11" "r05" "r07")
 LAHAINA_DTBS=("lahaina-v2.1.dtb" "lahaina-v2.dtb" "lahaina.dtb")
 
 # KernelSU Next (legacy branch for non-GKI kernels)
+# v3.4.0-legacy + fixes, notably "never sleep while holding the policy rwlock write side"
+# (applying the KernelSU sepolicy rules could soft lock every CPU on non-GKI kernels)
 KSUN_REPO="https://github.com/KernelSU-Next/KernelSU-Next"
-KSUN_REF="v3.4.0-legacy"
+KSUN_REF="e5f5ec998de88b9fc43c62cff8f7ae12d3f4800a"
 
 KSRC=""
 OUT=""
