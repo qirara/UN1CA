@@ -43,7 +43,7 @@ jobs:
         run: |
           sudo apt update
           DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
-            bc bison cpio flex git libelf-dev libssl-dev lz4 make python3 xz-utils
+            bc bison cpio flex git kmod libelf-dev libssl-dev lz4 make python3 xz-utils
 
       - name: Restore clang toolchain
         id: clang-cache

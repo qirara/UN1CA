@@ -15,7 +15,7 @@
 #   Image-dtb      Kernel image with the lahaina base DTBs appended
 #   dtb            lahaina base DTBs (v1, v2, v2.1) concatenated
 #   dtbo.img       DTBO image built from the p3q board overlays
-#   modules/       Stripped kernel modules
+#   modules/       Stripped kernel modules along with modules.dep/modules.alias/modules.softdep
 #   kernel.release Kernel release string
 #   ksu.version    KernelSU Next version code
 
@@ -175,14 +175,31 @@ COLLECT_ARTIFACTS()
     done
     MAKE_DTBO_IMAGE "$OUT/dtbo.img" "${DTBO_FILES[@]}"
 
+    KMAKE -s kernelrelease > "$OUT/kernel.release"
+
+    # Install the modules in a temporary tree so that depmod generates modules.dep/modules.alias/modules.softdep,
+    # then flatten it (vendor modules all live in /vendor/lib/modules)
+    local MOD_TREE="$KOUT/modules_install"
+    local MOD_DIR
+    MOD_DIR="$MOD_TREE/lib/modules/$(cat "$OUT/kernel.release")"
+    rm -rf "$MOD_TREE"
+    KMAKE INSTALL_MOD_PATH="$MOD_TREE" INSTALL_MOD_STRIP=1 modules_install
+    [ -f "$MOD_DIR/modules.dep" ] || ABORT "modules.dep not generated, is depmod (kmod) installed?"
+
     rm -rf "$OUT/modules"
     mkdir -p "$OUT/modules"
     while IFS= read -r f; do
+        if [ -f "$OUT/modules/$(basename "$f")" ]; then
+            ABORT "Duplicate module name: $(basename "$f")"
+        fi
         cp -a "$f" "$OUT/modules/"
-    done < <(find "$KOUT" -name "*.ko" -not -path "*/scripts/*" | sort)
-    find "$OUT/modules" -name "*.ko" -exec llvm-strip --strip-debug {} \;
-
-    KMAKE -s kernelrelease > "$OUT/kernel.release"
+    done < <(find "$MOD_DIR" -name "*.ko" | sort)
+    sed -E "s|[^ :]*/([^/ :]+\.ko)|\1|g" "$MOD_DIR/modules.dep" > "$OUT/modules/modules.dep"
+    for f in modules.alias modules.softdep; do
+        if [ -f "$MOD_DIR/$f" ]; then
+            cp -a "$MOD_DIR/$f" "$OUT/modules/$f"
+        fi
+    done
 
     LOG "- Kernel release: $(cat "$OUT/kernel.release")"
     LOG "- KernelSU Next version: $(cat "$OUT/ksu.version")"
