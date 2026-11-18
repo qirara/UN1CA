@@ -27,8 +27,10 @@ KERNEL_REPO="https://github.com/yanzihan/android_kernel_samsung_sm8350-p3q"
 KERNEL_REF="3af90cf2d876e1a5a853bc1270ee0ef29387bef0"
 KERNEL_DEFCONFIG="vendor/p3q_chn_hkx_defconfig"
 KERNEL_LOCALVERSION="-qgki-UN1CA-KSUN"
-# p3q board revisions, keep in the same order as arch/arm64/boot/dts/samsung/palette/p3q/Makefile
-P3Q_DTBO_REVS=("r11" "r09" "r07" "r05" "r03")
+# p3q board revisions and lahaina base DTBs, in the same order as the stock dtbo.img/vendor_boot.img
+# (both are byte-identical to the stock ones once ordered like this)
+P3Q_DTBO_REVS=("r03" "r09" "r11" "r05" "r07")
+LAHAINA_DTBS=("lahaina-v2.1.dtb" "lahaina-v2.dtb" "lahaina.dtb")
 
 # KernelSU Next (legacy branch for non-GKI kernels)
 KSUN_REPO="https://github.com/KernelSU-Next/KernelSU-Next"
@@ -159,7 +161,7 @@ COLLECT_ARTIFACTS()
 
     : > "$OUT/dtb"
     local DTB
-    for DTB in lahaina.dtb lahaina-v2.dtb lahaina-v2.1.dtb; do
+    for DTB in "${LAHAINA_DTBS[@]}"; do
         [ -f "$DTS_OUT/vendor/qcom/$DTB" ] || ABORT "$DTB not found"
         cat "$DTS_OUT/vendor/qcom/$DTB" >> "$OUT/dtb"
     done
