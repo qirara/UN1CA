@@ -140,16 +140,61 @@ COPY_IF_MISSING "camera/camera-feature.xml" "$TARGET_FW/system/system/cameradata
 
 TMP="$(mktemp -d)"
 if [ -f "$TARGET_FW/$SDHMS" ]; then
-    unzip -q -o "$TARGET_FW/$SDHMS" "assets/*" "res/raw/*" -d "$TMP" || true
+    unzip -q -o "$TARGET_FW/$SDHMS" -d "$TMP/sdhms" &> /dev/null || true
 fi
-for f in "assets/$TARGET_DVFSAPP_CONFIG_SSRM_POLICY_FILENAME.xml" "assets/$TARGET_DVFSAPP_CONFIG_SSRM_POLICY_FILENAME" "assets/siop_model"; do
-    if [ -f "$TMP/$f" ]; then
-        COPY_IF_MISSING "dvfs/siop_model.xml" "$TMP/$f"
+
+# SIOP policy: SDHMS/SSRM ship it encrypted (AES-256-CBC, key: SHA-256 of the policy file name, IV: first 16 bytes)
+SSRM="$TARGET_DVFSAPP_CONFIG_SSRM_POLICY_FILENAME"
+DECODE_SIOP()
+{
+    if grep -a -q "<siop_document" "$1"; then
+        cp -a "$1" "$2"
+    else
+        local KEY IV
+        KEY="$(printf "%s" "$SSRM" | sha256sum | cut -d " " -f 1)"
+        IV="$(head -c 16 "$1" | od -A n -t x1 -v | tr -d " \n")"
+        tail -c +17 "$1" | openssl enc -d -aes-256-cbc -K "$KEY" -iv "$IV" > "$2" 2> /dev/null || return 1
+    fi
+    grep -a -q "<siop_document" "$2"
+}
+
+SIOP_CANDIDATES=()
+if [ -d "$TMP/sdhms" ]; then
+    while IFS= read -r f; do
+        SIOP_CANDIDATES+=("$f")
+    done < <(find "$TMP/sdhms" -type f \( -name "siop_model" -o -name "$SSRM" -o -name "$SSRM.xml" \) | LC_ALL=C sort)
+fi
+if [ -f "$TARGET_FW/system/system/framework/ssrm.jar" ]; then
+    unzip -q -o "$TARGET_FW/system/system/framework/ssrm.jar" -d "$TMP/ssrm" &> /dev/null || true
+    while IFS= read -r f; do
+        SIOP_CANDIDATES+=("$f")
+    done < <(find "$TMP/ssrm" -type f \( -name "siop_model" -o -name "$SSRM" -o -name "$SSRM.xml" \) 2> /dev/null | LC_ALL=C sort)
+fi
+while IFS= read -r f; do
+    SIOP_CANDIDATES+=("$f")
+done < <(find "$TARGET_FW/system" "$TARGET_FW/vendor" "$TARGET_FW/product" -type f \
+    \( -name "siop_model" -o -name "$SSRM" -o -name "$SSRM.xml" \) 2> /dev/null | LC_ALL=C sort)
+
+SIOP_FOUND=false
+for f in "${SIOP_CANDIDATES[@]}"; do
+    if DECODE_SIOP "$f" "$TMP/siop_model.xml"; then
+        echo "- Found SIOP policy ($SSRM): ${f//$TMP\//}"
+        COPY_IF_MISSING "dvfs/siop_model.xml" "$TMP/siop_model.xml"
+        SIOP_FOUND=true
         break
+    else
+        echo "! Unable to decode SIOP policy candidate: ${f//$TMP\//}"
     fi
 done
+if ! $SIOP_FOUND; then
+    echo "! SIOP policy $SSRM not found in stock firmware, falling back to the generic one"
+    echo "  SDHMS entries: $(find "$TMP/sdhms" -type f \( -path "*/assets/*" -o -iname "*siop*" -o -iname "*ssrm*" \) 2> /dev/null | sed "s|$TMP/sdhms/||" | tr "\n" " ")"
+    echo "  ssrm.jar entries: $(find "$TMP/ssrm" -type f 2> /dev/null | sed "s|$TMP/ssrm/||" | tr "\n" " ")"
+    COPY_IF_MISSING "dvfs/siop_model.xml" "$SRC_DIR/unica/patches/dvfs/assets/siop_default.xml"
+fi
+
 if ! unzip -l "$SOURCE_FW/$SDHMS" 2> /dev/null | grep -q "res/raw/$TARGET_DVFSAPP_CONFIG_DVFS_POLICY_FILENAME.xml"; then
-    COPY_IF_MISSING "dvfs/$TARGET_DVFSAPP_CONFIG_DVFS_POLICY_FILENAME.xml" "$TMP/res/raw/$TARGET_DVFSAPP_CONFIG_DVFS_POLICY_FILENAME.xml"
+    COPY_IF_MISSING "dvfs/$TARGET_DVFSAPP_CONFIG_DVFS_POLICY_FILENAME.xml" "$TMP/sdhms/res/raw/$TARGET_DVFSAPP_CONFIG_DVFS_POLICY_FILENAME.xml"
 fi
 rm -rf "$TMP"
 
