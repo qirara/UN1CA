@@ -124,6 +124,18 @@ COPY_IF_MISSING()
     done
     echo
 
+    echo "---------- Framework features ----------"
+    TMP="$(mktemp -d)"
+    unzip -q -o "$TARGET_FW/system/system/framework/framework.jar" "classes*.dex" -d "$TMP" &> /dev/null || true
+    echo "RIL feature tokens: $(cat "$TMP"/classes*.dex 2> /dev/null | strings -a | \
+        grep -o -E "\b(onebinary|satellite_carrier|entitlement_sa|[a-z]+cdmaless)\b" | sort -u | tr "\n" " ")"
+    echo "eSE COS candidates: $(cat "$TMP"/classes*.dex 2> /dev/null | strings -a | \
+        grep -o -E "\b(JCOP[0-9.]+[A-Z]?|UT[0-9.]+[A-Z]?)\b" | sort -u | tr "\n" " ")"
+    rm -rf "$TMP"
+    echo "eUICC: $(find "$TARGET_FW/system/system" "$TARGET_FW/vendor/etc/permissions" -maxdepth 3 \
+        \( -iname "*euicc*" -o -iname "EuiccGoogle" \) 2> /dev/null | sed "s|$TARGET_FW||" | tr "\n" " ")"
+    echo
+
     echo "---------- /vendor/lib/modules ----------"
     find "$TARGET_FW/vendor/lib/modules" -maxdepth 2 2> /dev/null | sed "s|$TARGET_FW||" | LC_ALL=C sort || true
     echo
