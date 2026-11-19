@@ -161,12 +161,40 @@ def check_split_policy(dirs, work):
             args.append(out)
         cmd = [secilc, "-m", "-M", "true", "-G", "-N", "-c", "30",
                "-o", os.path.join(tmp, "policy"), "-f", os.devnull] + args
-        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        if p.returncode != 0:
-            out = p.stdout.strip()
+
+        def to_rel(text):
             for i, path in enumerate(files):
-                out = out.replace(os.path.join(tmp, "%02d_%s" % (i, os.path.basename(path))), rel(path, work))
-            errors.append("sepolicy: split policy (vendor %s) does not compile:\n%s" % (vers, out))
+                text = text.replace(os.path.join(tmp, "%02d_%s" % (i, os.path.basename(path))), rel(path, work))
+            return text
+
+        # secilc stops at the first statement it cannot resolve: blank it in the temporary copy and
+        # compile again, so that a single run lists every statement that breaks the boot
+        failures = []
+        first_output = None
+        for _ in range(60):
+            p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            if p.returncode == 0:
+                break
+            if first_output is None:
+                first_output = p.stdout.strip()
+            m = re.search(r"Failed to resolve (\S+) statement at (\S+):(\d+)", p.stdout)
+            if not m or not os.path.isfile(m.group(2)):
+                failures.append(to_rel(p.stdout.strip()))
+                break
+            path, lineno = m.group(2), int(m.group(3))
+            with open(path, encoding="utf-8", errors="replace") as f:
+                lines = f.readlines()
+            if not 0 < lineno <= len(lines) or not lines[lineno - 1].strip():
+                failures.append(to_rel(p.stdout.strip()))
+                break
+            failures.append("%s:%d: %s" % (to_rel(path), lineno, lines[lineno - 1].strip()[:300]))
+            lines[lineno - 1] = "\n"
+            with open(path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+
+        if failures:
+            errors.append("sepolicy: split policy (vendor %s) does not compile:\n%s\nUnresolved statements:\n  %s"
+                          % (vers, to_rel(first_output or ""), "\n  ".join(failures)))
         else:
             print("- Split policy (vendor %s) compiles fine" % vers)
     finally:

@@ -122,9 +122,38 @@ for f in "$WORK_DIR/vendor/etc/selinux/vendor_property_contexts" \
     rm -f "$f.dup"
 done
 
+# init fails to compile the split policy on boot when a mapping file references a type or attribute
+# that no policy file declares, eg. the <type>_30_0 attribute of a type that was not public yet when
+# the target vendor policy was built (the vendor cannot use it anyway): drop those statements
+SEPOLICY_FILES=()
+for f in "$WORK_DIR/system/system/etc/selinux/plat_sepolicy.cil" \
+         "$WORK_DIR/system/system/etc/selinux/mapping/$CIL_NAME.compat.cil" \
+         "$WORK_DIR/$(GET_SYSTEM_EXT)/etc/selinux/system_ext_sepolicy.cil" \
+         "$WORK_DIR/product/etc/selinux/product_sepolicy.cil" \
+         "$WORK_DIR/vendor/etc/selinux/plat_pub_versioned.cil" \
+         "$WORK_DIR/vendor/etc/selinux/vendor_sepolicy.cil" \
+         "$WORK_DIR/odm/etc/selinux/odm_sepolicy.cil"; do
+    [ -f "$f" ] && SEPOLICY_FILES+=("$f")
+done
+MAPPING_FILES=()
+for f in "$WORK_DIR/system/system/etc/selinux/mapping/$CIL_NAME.cil" \
+         "$WORK_DIR/$(GET_SYSTEM_EXT)/etc/selinux/mapping/$CIL_NAME.cil" \
+         "$WORK_DIR/product/etc/selinux/mapping/$CIL_NAME.cil"; do
+    [ -f "$f" ] && MAPPING_FILES+=("$f")
+done
+if [ "${#MAPPING_FILES[@]}" != "0" ]; then
+    UNDECLARED="$(python3 "$MODPATH/prune_mapping.py" "${SEPOLICY_FILES[@]}" -- "${MAPPING_FILES[@]}")" \
+        || ABORT "Failed to prune the SELinux mapping files"
+    for e in $UNDECLARED; do
+        PATCHED=true
+        LOG "- \"$e\" is not declared by any SELinux policy. Removing it from the mapping files"
+    done
+fi
+
 if ! $PATCHED; then
     LOG "\033[0;33m! Nothing to do\033[0m"
 fi
 
-unset ENTRIES DUPLICATES CIL_NAME PATCHED VENDOR_API_LIST SYSTEM_PROPERTY_CONTEXTS
+unset ENTRIES DUPLICATES CIL_NAME PATCHED VENDOR_API_LIST SYSTEM_PROPERTY_CONTEXTS \
+    SEPOLICY_FILES MAPPING_FILES UNDECLARED
 unset -f GET_SYSTEM_EXT
