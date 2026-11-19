@@ -63,8 +63,8 @@ jobs:
               for m in $(cut -f 1 /etc/apt/apt-mirrors.txt 2> /dev/null | grep -v security) \
                       http://azure.archive.ubuntu.com/ubuntu/ http://archive.ubuntu.com/ubuntu/ \
                       http://us.archive.ubuntu.com/ubuntu/ http://mirrors.edge.kernel.org/ubuntu/; do
-                  out="$(curl -s -o /dev/null --max-time 10 -w '%{http_code} %{speed_download}' \
-                      "${m%/}/dists/$codename/main/binary-amd64/Packages.gz" || true)"
+                  out="$(curl -s -o /dev/null --max-time 8 -w '%{http_code} %{speed_download}' \
+                      "${m%/}/dists/$codename/Contents-amd64.gz" || true)"
                   speed="${out#* }"
                   speed="${speed%.*}"
                   [[ "${out%% *}" == "200" && "$speed" =~ ^[0-9]+$ ]] || speed=0
@@ -187,8 +187,8 @@ jobs:
               for m in $(cut -f 1 /etc/apt/apt-mirrors.txt 2> /dev/null | grep -v security) \
                       http://azure.archive.ubuntu.com/ubuntu/ http://archive.ubuntu.com/ubuntu/ \
                       http://us.archive.ubuntu.com/ubuntu/ http://mirrors.edge.kernel.org/ubuntu/; do
-                  out="$(curl -s -o /dev/null --max-time 10 -w '%{http_code} %{speed_download}' \
-                      "${m%/}/dists/$codename/main/binary-amd64/Packages.gz" || true)"
+                  out="$(curl -s -o /dev/null --max-time 8 -w '%{http_code} %{speed_download}' \
+                      "${m%/}/dists/$codename/Contents-amd64.gz" || true)"
                   speed="${out#* }"
                   speed="${speed%.*}"
                   [[ "${out%% *}" == "200" && "$speed" =~ ^[0-9]+$ ]] || speed=0
@@ -219,6 +219,10 @@ jobs:
           # Not available for every runner kernel, only needed to mount f2fs images (p3q has none)
           sudo DEBIAN_FRONTEND=noninteractive timeout 180 apt-get -q -y -o DPkg::Lock::Timeout=60 \
               install --no-install-recommends linux-modules-extra-$(uname -r) || true
+          # apt leaves root-only files behind, actions/cache/save could not read them
+          sudo rm -rf "$RUNNER_TEMP/apt-archives/partial" "$RUNNER_TEMP/apt-archives/lock"
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/apt-archives"
+          du -sh "$RUNNER_TEMP/apt-archives"
           sudo modprobe erofs f2fs || true
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
