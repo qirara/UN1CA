@@ -160,9 +160,9 @@ jobs:
       - name: Download target firmware
         uses: nick-fields/retry@v4
         with:
-          timeout_minutes: 60
+          timeout_minutes: 90
           max_attempts: 3
-          retry_on: error
+          retry_on: any
           command: |
             MODEL="$(cut -d "/" -f 1 <<< "$TARGET_FIRMWARE")"
             CSC="$(cut -d "/" -f 2 <<< "$TARGET_FIRMWARE")"
@@ -178,9 +178,9 @@ jobs:
       - name: Download stock firmwares
         uses: nick-fields/retry@v4
         with:
-          timeout_minutes: 60
+          timeout_minutes: 90
           max_attempts: 3
-          retry_on: error
+          retry_on: any
           command: ./scripts/download_fw.sh
 
       - name: Extract stock firmwares
