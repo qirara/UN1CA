@@ -55,6 +55,38 @@ jobs:
               done
               return 1
           }
+          # The runner's default Ubuntu mirror can be very slow (~60 kB/s): switch to the fastest of a
+          # few official mirrors. apt still verifies every package against the signed archive metadata.
+          SELECT_APT_MIRROR() {
+              local codename m out speed best="" best_speed=0
+              codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+              for m in $(cut -f 1 /etc/apt/apt-mirrors.txt 2> /dev/null | grep -v security) \
+                      http://azure.archive.ubuntu.com/ubuntu/ http://archive.ubuntu.com/ubuntu/ \
+                      http://us.archive.ubuntu.com/ubuntu/ http://mirrors.edge.kernel.org/ubuntu/; do
+                  out="$(curl -s -o /dev/null --max-time 10 -w '%{http_code} %{speed_download}' \
+                      "${m%/}/dists/$codename/main/binary-amd64/Packages.gz" || true)"
+                  speed="${out#* }"
+                  speed="${speed%.*}"
+                  [[ "${out%% *}" == "200" && "$speed" =~ ^[0-9]+$ ]] || speed=0
+                  echo "  $m: $((speed / 1024)) kB/s" >&2
+                  if [ "$speed" -gt "$best_speed" ]; then
+                      best="$m"
+                      best_speed="$speed"
+                  fi
+              done
+              echo "$best"
+          }
+          BEST_MIRROR="$(SELECT_APT_MIRROR)"
+          echo "Ubuntu mirror: ${BEST_MIRROR:-unchanged}"
+          if [ "$BEST_MIRROR" ] && [ -f /etc/apt/apt-mirrors.txt ]; then
+              { printf '%s\tpriority:1\n' "$BEST_MIRROR"
+                grep -v -F "$BEST_MIRROR" /etc/apt/apt-mirrors.txt | sed -E 's/priority:[0-9]+/priority:5/'; } \
+                  > "$RUNNER_TEMP/apt-mirrors.txt"
+              sudo cp "$RUNNER_TEMP/apt-mirrors.txt" /etc/apt/apt-mirrors.txt
+          elif [ "$BEST_MIRROR" ]; then
+              sudo sed -i -E "s#https?://[a-z0-9.-]*archive\.ubuntu\.com/ubuntu/?#${BEST_MIRROR%/}/#g" \
+                  /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2> /dev/null || true
+          fi
           APT_GET update
           APT_GET install -y \
             bc bison cpio flex git kmod libelf-dev libssl-dev lz4 make python3 xz-utils
@@ -147,6 +179,38 @@ jobs:
               done
               return 1
           }
+          # The runner's default Ubuntu mirror can be very slow (~60 kB/s): switch to the fastest of a
+          # few official mirrors. apt still verifies every package against the signed archive metadata.
+          SELECT_APT_MIRROR() {
+              local codename m out speed best="" best_speed=0
+              codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+              for m in $(cut -f 1 /etc/apt/apt-mirrors.txt 2> /dev/null | grep -v security) \
+                      http://azure.archive.ubuntu.com/ubuntu/ http://archive.ubuntu.com/ubuntu/ \
+                      http://us.archive.ubuntu.com/ubuntu/ http://mirrors.edge.kernel.org/ubuntu/; do
+                  out="$(curl -s -o /dev/null --max-time 10 -w '%{http_code} %{speed_download}' \
+                      "${m%/}/dists/$codename/main/binary-amd64/Packages.gz" || true)"
+                  speed="${out#* }"
+                  speed="${speed%.*}"
+                  [[ "${out%% *}" == "200" && "$speed" =~ ^[0-9]+$ ]] || speed=0
+                  echo "  $m: $((speed / 1024)) kB/s" >&2
+                  if [ "$speed" -gt "$best_speed" ]; then
+                      best="$m"
+                      best_speed="$speed"
+                  fi
+              done
+              echo "$best"
+          }
+          BEST_MIRROR="$(SELECT_APT_MIRROR)"
+          echo "Ubuntu mirror: ${BEST_MIRROR:-unchanged}"
+          if [ "$BEST_MIRROR" ] && [ -f /etc/apt/apt-mirrors.txt ]; then
+              { printf '%s\tpriority:1\n' "$BEST_MIRROR"
+                grep -v -F "$BEST_MIRROR" /etc/apt/apt-mirrors.txt | sed -E 's/priority:[0-9]+/priority:5/'; } \
+                  > "$RUNNER_TEMP/apt-mirrors.txt"
+              sudo cp "$RUNNER_TEMP/apt-mirrors.txt" /etc/apt/apt-mirrors.txt
+          elif [ "$BEST_MIRROR" ]; then
+              sudo sed -i -E "s#https?://[a-z0-9.-]*archive\.ubuntu\.com/ubuntu/?#${BEST_MIRROR%/}/#g" \
+                  /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2> /dev/null || true
+          fi
           APT_GET update
           APT_GET install -y --no-install-recommends \
             attr ccache clang ffmpeg libbrotli-dev libbz2-dev \
