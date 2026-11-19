@@ -210,6 +210,22 @@ if ! unzip -l "$SOURCE_FW/$SDHMS" 2> /dev/null | grep -q "res/raw/$TARGET_DVFSAP
 fi
 rm -rf "$TMP"
 
+# SELinux pre-check on the unpatched source system/system_ext/product and stock vendor/odm files,
+# unica/patches/selinux fixes some of the known issues, the final check runs on the built work dir
+echo
+echo "SELinux pre-check (unpatched files):"
+SEPOL_WORK="$(mktemp -d)"
+mkdir -p "$SEPOL_WORK/system"
+ln -s "$SOURCE_FW/system/system" "$SEPOL_WORK/system/system"
+for p in "system_ext" "product"; do
+    [ -d "$SOURCE_FW/$p" ] && ln -s "$SOURCE_FW/$p" "$SEPOL_WORK/$p"
+done
+for p in "vendor" "odm"; do
+    [ -d "$TARGET_FW/$p" ] && ln -s "$TARGET_FW/$p" "$SEPOL_WORK/$p"
+done
+python3 "$SRC_DIR/.github/scripts/check_selinux.py" "$SEPOL_WORK" | tee "$OUT/selinux_precheck.txt" || true
+rm -rf "$SEPOL_WORK"
+
 if [ "$ERRORS" != "0" ]; then
     echo "$ERRORS config check(s) failed, please update target/p3q/config.sh or platform/sm8350/config.sh" >&2
     exit 1

@@ -112,7 +112,7 @@ jobs:
           DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
             attr ccache clang ffmpeg libbrotli-dev libbz2-dev \
             libgtest-dev libprotobuf-dev libunwind-dev libpcre2-dev \
-            libzstd-dev lld protobuf-compiler webp
+            libzstd-dev lld protobuf-compiler secilc webp
           # Not available for every runner kernel, only needed to mount f2fs images
           DEBIAN_FRONTEND=noninteractive sudo apt install -yq linux-modules-extra-$(uname -r) || true
           sudo modprobe erofs f2fs || true
@@ -213,3 +213,7 @@ jobs:
           path: out/UN1CA_*.zip
           if-no-files-found: error
           compression-level: 0
+
+      # Fails the run when the built ROM can not boot because of its SELinux files
+      - name: Check SELinux files
+        run: python3 ./.github/scripts/check_selinux.py out/target/p3q/work_dir

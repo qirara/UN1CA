@@ -95,9 +95,36 @@ for e in $DUPLICATES; do
     fi
 done
 
+# init aborts on boot if the same property_contexts entry (same name and match type) is defined twice,
+# even with the same context (property_info_serializer), keep the source system one for any other
+# entry also defined by the target vendor/odm
+SYSTEM_PROPERTY_CONTEXTS=()
+for f in "$WORK_DIR/system/system/etc/selinux/plat_property_contexts" \
+         "$WORK_DIR/$(GET_SYSTEM_EXT)/etc/selinux/system_ext_property_contexts" \
+         "$WORK_DIR/product/etc/selinux/product_property_contexts"; do
+    [ -f "$f" ] && SYSTEM_PROPERTY_CONTEXTS+=("$f")
+done
+for f in "$WORK_DIR/vendor/etc/selinux/vendor_property_contexts" \
+         "$WORK_DIR/odm/etc/selinux/odm_property_contexts"; do
+    [ -f "$f" ] && [ "${#SYSTEM_PROPERTY_CONTEXTS[@]}" != "0" ] || continue
+    # shellcheck disable=SC2016
+    awk -v target="$f" '
+        function key() { return $1 " " ($3 == "exact" ? "exact" : "prefix") }
+        FILENAME != target { if ($1 !~ /^#/ && NF >= 2) seen[key()] = 1; next }
+        $1 !~ /^#/ && NF >= 2 && (key() in seen) { print "#SEC_DUPLICATE: " $0; print $1 > "/dev/stderr"; next }
+        { print }
+    ' "${SYSTEM_PROPERTY_CONTEXTS[@]}" "$f" > "$f.tmp" 2> "$f.dup" || ABORT "Failed to check $f for duplicate entries"
+    while IFS= read -r e; do
+        PATCHED=true
+        LOG "- \"$e\" SELinux duplicate entry found in ${f//$WORK_DIR/}. Removing"
+    done < "$f.dup"
+    mv -f "$f.tmp" "$f"
+    rm -f "$f.dup"
+done
+
 if ! $PATCHED; then
     LOG "\033[0;33m! Nothing to do\033[0m"
 fi
 
-unset ENTRIES DUPLICATES CIL_NAME PATCHED VENDOR_API_LIST
+unset ENTRIES DUPLICATES CIL_NAME PATCHED VENDOR_API_LIST SYSTEM_PROPERTY_CONTEXTS
 unset -f GET_SYSTEM_EXT
