@@ -1,0 +1,1 @@
+getprop("ro.boot.em.model") == "SM-G9980" || getprop("ro.boot.em.model") == "" || abort("E3004: This package is for \"SM-G9980\" devices; this is a \"" + getprop("ro.boot.em.model") + "\".");

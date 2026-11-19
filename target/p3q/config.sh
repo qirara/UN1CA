@@ -3,7 +3,8 @@
 # Device configuration file for Galaxy S21 Ultra 5G (Snapdragon) (p3q)
 TARGET_NAME="Galaxy S21 Ultra 5G (Snapdragon)"
 TARGET_CODENAME="p3q"
-TARGET_ASSERT_MODEL=("SM-G9980")
+# The model is checked in installer/assertions.edify: some p3q recoveries (eg. OrangeFox) do not expose ro.boot.em.model
+TARGET_ASSERT_MODEL=()
 TARGET_PLATFORM="sm8350"
 # The IMEI/serial must be accepted by Samsung FUS for SM-G9980,
 # the value can be overridden with the P3Q_TARGET_FIRMWARE env variable (eg. a GitHub Actions secret)
